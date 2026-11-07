@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>يلا نفطر 🥪</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        thndr: {
+                            yellow: '#FFC800',
+                            dark: '#111827',
+                            gray: '#F3F4F6',
+                            accent: '#E6B200'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+        body { font-family: 'Cairo', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-900 p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="bg-thndr-yellow text-thndr-dark rounded-2xl p-6 shadow-md border-b-4 border-thndr-dark flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-3xl md:text-5xl font-extrabold flex items-center gap-3">
+                    <i class="fa-solid fa-bolt"></i> يلا نفطر
+                </h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="syncStatus" class="text-xs bg-black/10 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-green-600 animate-pulse"></span> متصل لايف
+                </span>
+                <button onclick="exportToRestaurantWhatsApp()" class="bg-thndr-dark hover:bg-black text-white font-bold py-3 px-6 rounded-xl shadow transition flex items-center gap-2 text-sm md:text-base">
+                    <i class="fa-brands fa-whatsapp text-thndr-yellow text-xl"></i> نسخة للمطعم للواتساب
+                </button>
+            </div>
+        </header>
+
+        <!-- Setup Bar -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-1">اسم المطعم</label>
+                <input type="text" id="restaurantName" value="مطعم الواحي" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-thndr-yellow font-semibold" onchange="saveConfig()">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-1">الشخص الدفّاع اليوم</label>
+                <input type="text" id="payerName" placeholder="اكتب اسمه هنا..." class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-thndr-yellow font-semibold" oninput="saveConfig()">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-1">رقم / عنوان InstaPay</label>
+                <input type="text" id="instapayAccount" placeholder="رقم الموبايل أو اليوزر..." class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-thndr-yellow font-semibold" oninput="saveConfig()">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-1">إجمالي الدليفري (جنية)</label>
+                <input type="number" id="deliveryFee" value="30" min="0" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-thndr-yellow font-bold" oninput="saveConfig()">
+            </div>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Form Section -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                    <h2 class="font-bold text-lg text-thndr-dark border-b pb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-utensils text-thndr-accent"></i> هتاكل ايه؟
+                    </h2>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">اسمك *</label>
+                        <input type="text" id="employeeName" placeholder="اكتب اسمك هنا..." class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-thndr-yellow font-bold">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">اختر الصنف *</label>
+                        <select id="itemSelect" onchange="onItemSelectionChange()" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-thndr-yellow font-semibold mb-2">
+                        </select>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-bold text-gray-600 mb-1">الكمية *</label>
+                                <input type="number" id="itemQty" value="1" min="1" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-1.5 text-center font-bold text-xs focus:outline-none focus:ring-2 focus:ring-thndr-yellow">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-gray-600 mb-1">السعر (بيتسجل تلقائي)</label>
+                                <input type="number" id="itemPrice" placeholder="أدخل السعر..." min="0" step="0.5" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-1.5 text-center font-bold text-xs focus:outline-none focus:ring-2 focus:ring-thndr-yellow">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">نوع العيش *</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="cursor-pointer border rounded-xl p-2 text-center text-xs font-bold hover:bg-thndr-yellow transition border-gray-300 has-[:checked]:bg-thndr-yellow has-[:checked]:border-thndr-dark">
+                                <input type="radio" name="breadType" value="بلدي" class="hidden" checked> بلدي
+                            </label>
+                            <label class="cursor-pointer border rounded-xl p-2 text-center text-xs font-bold hover:bg-thndr-yellow transition border-gray-300 has-[:checked]:bg-thndr-yellow has-[:checked]:border-thndr-dark">
+                                <input type="radio" name="breadType" value="شامي" class="hidden"> شامي
+                            </label>
+                            <label class="cursor-pointer border rounded-xl p-2 text-center text-xs font-bold hover:bg-thndr-yellow transition border-gray-300 has-[:checked]:bg-thndr-yellow has-[:checked]:border-thndr-dark">
+                                <input type="radio" name="breadType" value="فينو" class="hidden"> فينو
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">ملاحظات على السندوتش:</label>
+                        <div class="flex flex-wrap gap-1.5 mb-2">
+                            <button type="button" onclick="addNoteTag('من غير سلطة وطحينة')" class="bg-gray-100 hover:bg-thndr-yellow text-gray-800 text-[10px] font-semibold px-2 py-1 rounded-lg border border-gray-200 transition">من غير سلطة وطحينة</button>
+                            <button type="button" onclick="addNoteTag('طحينة بس')" class="bg-gray-100 hover:bg-thndr-yellow text-gray-800 text-[10px] font-semibold px-2 py-1 rounded-lg border border-gray-200 transition">طحينة بس</button>
+                            <button type="button" onclick="addNoteTag('من غير سلطة')" class="bg-gray-100 hover:bg-thndr-yellow text-gray-800 text-[10px] font-semibold px-2 py-1 rounded-lg border border-gray-200 transition">من غير سلطة</button>
+                        </div>
+                        <input type="text" id="itemNotes" placeholder="اكتب أي ملاحظة خاصة..." class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-thndr-yellow">
+                    </div>
+
+                    <button onclick="addSandwichToOrder()" class="w-full bg-thndr-yellow hover:bg-thndr-accent text-thndr-dark font-extrabold py-3 rounded-xl transition shadow border-2 border-thndr-dark text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-plus-circle"></i> إضافة السندوتش للأوردر
+                    </button>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-3">
+                    <h3 class="font-bold text-xs text-gray-800 border-b pb-2 flex justify-between items-center">
+                        <span>إضافة صنف جديد للمنيو</span>
+                        <button onclick="toggleMenuEditor()" class="text-[10px] text-indigo-600 hover:underline">إظهار/إخفاء</button>
+                    </h3>
+                    <div id="menuEditorSection" class="hidden space-y-2">
+                        <input type="text" id="newItemCategory" placeholder="القسم" class="w-full text-xs bg-gray-50 border p-2 rounded-lg">
+                        <input type="text" id="newItemName" placeholder="اسم الصنف" class="w-full text-xs bg-gray-50 border p-2 rounded-lg">
+                        <button onclick="addNewMenuItem()" class="w-full bg-thndr-dark text-white text-xs py-2 rounded-lg hover:bg-black transition font-bold">حفظ الصنف</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Section -->
+            <div class="lg:col-span-7 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h2 class="font-bold text-lg text-thndr-dark">
+                            <i class="fa-solid fa-list-check text-thndr-accent"></i> الأوردرات اليومية
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <button onclick="clearAllOrders()" class="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded bg-red-50 hover:bg-red-100 transition">مسح الكشف</button>
+                            <span id="peopleCountBadge" class="bg-thndr-yellow text-thndr-dark text-xs font-extrabold px-3 py-1 rounded-full border border-thndr-dark">
+                                المشاركين: 0
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-xs font-bold border-b">
+                                    <th class="p-2.5">اسمك</th>
+                                    <th class="p-2.5">الأكـل والتفاصيل</th>
+                                    <th class="p-2.5">الإجمالي</th>
+                                    <th class="p-2.5">الحالة</th>
+                                    <th class="p-2.5 text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody" class="divide-y divide-gray-100 text-xs">
+                                <tr>
+                                    <td colspan="5" class="text-center py-8 text-gray-400">جاري تحميل الأوردرات لايف...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-purple-900 text-xs font-semibold">
+                        <span>InstaPay للتحويل: <strong id="instapayText" class="text-purple-700 underline">غير محدد</strong></span>
+                    </div>
+
+                    <div id="totalsSummary" class="p-3 bg-thndr-yellow/20 rounded-xl border border-thndr-yellow grid grid-cols-2 gap-2 text-center text-xs">
+                        <div class="bg-white p-2 rounded-lg border border-gray-100">
+                            <span class="block text-[10px] font-bold text-gray-500">نصيب الفرد دليفري</span>
+                            <span id="perPersonDelivery" class="font-bold text-indigo-700">0 جم</span>
+                        </div>
+                        <div class="bg-white p-2 rounded-lg border border-gray-100">
+                            <span class="block text-[10px] font-bold text-gray-500">المطلوب كلياً</span>
+                            <span id="grandTotal" class="font-extrabold text-thndr-dark text-sm">0 جم</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // FIREBASE PUBLIC ANONYMOUS CONFIG
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-PlaceholderKeyForAppSyncOnly12345",
+            authDomain: "yalla-neftar-sync.firebaseapp.com",
+            projectId: "yalla-neftar-sync",
+            storageBucket: "yalla-neftar-sync.appspot.com",
+            messagingSenderId: "100200300400",
+            appId: "1:100200300400:web:a1b2c3d4e5f6g7h8"
+        };
+        
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        let dbOrdersRef = db.collection("daily_orders");
+        let dbConfigRef = db.collection("app_config").doc("current_config");
+
+        // Price Memory Dictionary
+        let savedItemPrices = {};
+
+        // FULL COMPREHENSIVE MENU
+        let menuItems = [
+            // فول وطعمية
+            { category: "فول وطعمية", name: "فول ساده" },
+            { category: "فول وطعمية", name: "فول بالزيت الحار" },
+            { category: "فول وطعمية", name: "فول بزيت الذرة" },
+            { category: "فول وطعمية", name: "فول بزيت الزيتون" },
+            { category: "فول وطعمية", name: "فول بالسمنة البلدي" },
+            { category: "فول وطعمية", name: "فول إسكندراني" },
+            { category: "فول وطعمية", name: "فول صلصة" },
+            { category: "فول وطعمية", name: "فول على طعمية" },
+            { category: "فول وطعمية", name: "فول على باذنجان" },
+            { category: "فول وطعمية", name: "فول على بطاطس" },
+            { category: "فول وطعمية", name: "فول على بابا غنوج" },
+            { category: "فول وطعمية", name: "فول على جبنة" },
+            { category: "فول وطعمية", name: "فول بالبيض" },
+            { category: "فول وطعمية", name: "فول بالاومليت" },
+            { category: "فول وطعمية", name: "فول علي مسقعة" },
+            { category: "فول وطعمية", name: "فول علي سجق" },
+            { category: "فول وطعمية", name: "فول بسطرمة" },
+            { category: "فول وطعمية", name: "طعمية" },
+            { category: "فول وطعمية", name: "طعمية إسكندراني" },
+            { category: "فول وطعمية", name: "طعمية بالجرجير" },
+            { category: "فول وطعمية", name: "طعمية كيري" },
+            { category: "فول وطعمية", name: "طعمية بسطرمة" },
+            { category: "فول وطعمية", name: "طعمية شيدر" },
+            { category: "فول وطعمية", name: "طعمية على باذنجان" },
+            { category: "فول وطعمية", name: "طعمية على بطاطس" },
+            { category: "فول وطعمية", name: "طعمية على جبنة" },
+            { category: "فول وطعمية", name: "طعمية على بابا غنوج" },
+            { category: "فول وطعمية", name: "طعمية على مسقعة" },
+            { category: "فول وطعمية", name: "طعمية بالبيض" },
+            { category: "فول وطعمية", name: "طعمية بالاومليت" },
+
+            // بطاطس وبيض وجبن
+            { category: "بطاطس وبيض", name: "بطاطس فارم" },
+            { category: "بطاطس وبيض", name: "كاتشب ومايونيز" },
+            { category: "بطاطس وبيض", name: "بطاطس شيبسي" },
+            { category: "بطاطس وبيض", name: "بطاطس بانية" },
+            { category: "بطاطس وبيض", name: "بطاطس مهروسة" },
+            { category: "بطاطس وبيض", name: "بطاطس فرسكا" },
+            { category: "بطاطس وبيض", name: "بطاطس رومى" },
+            { category: "بطاطس وبيض", name: "بطاطس شيدر" },
+            { category: "بطاطس وبيض", name: "بطاطس إسكندراني" },
+            { category: "بطاطس وبيض", name: "بطاطس بالسجق" },
+            { category: "بطاطس وبيض", name: "بطاطس بالبيض" },
+            { category: "بطاطس وبيض", name: "أومليت" },
+            { category: "بطاطس وبيض", name: "أومليت علي جبنة" },
+            { category: "بطاطس وبيض", name: "أومليت بسطرمة" },
+            { category: "بطاطس وبيض", name: "أومليت أباتشي" },
+            { category: "بطاطس وبيض", name: "أومليت خضار" },
+            { category: "بطاطس وبيض", name: "أومليت سجق" },
+            { category: "بطاطس وبيض", name: "بيض مسلوق" },
+            { category: "بطاطس وبيض", name: "جبنة بالطماطم" },
+
+            // الأطباق والأصناف الجانبية
+            { category: "أطباق وأصناف", name: "جبنة قريش بزيت زيتون" },
+            { category: "أطباق وأصناف", name: "بابا غنوج (طبق)" },
+            { category: "أطباق وأصناف", name: "مسقعة (طبق)" },
+            { category: "أطباق وأصناف", name: "مسقعة بالسجق (طبق)" },
+            { category: "أطباق وأصناف", name: "عجة (طبق)" },
+            { category: "أطباق وأصناف", name: "باذنجان مقلي (طبق)" },
+            { category: "أطباق وأصناف", name: "شكشوكة (طبق)" },
+            { category: "أطباق وأصناف", name: "جبنة مقلية (طبق)" },
+            { category: "أطباق وأصناف", name: "طبق سجق" },
+
+            // سندوتشات فرنساوي وتونة وحلويات
+            { category: "سندوتشات فرنساوي وحلويات", name: "فراخ بانية فرنساوي" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "استربس فرنساوي" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "سجق فرنساوي" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "كبدة فرنساوي" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "تونة سادة" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "تونة بالمايونيز" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "بلوبيف سادة" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "بلوبيف بالبيض" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "حلاوة سادة" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "حلاوة بالقشطة" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "مربى سادة" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "مربى بالقشطة" },
+            { category: "سندوتشات فرنساوي وحلويات", name: "سكلانس" },
+
+            // ميكسات الواحي
+            { category: "ميكسات الواحي", name: "صاروخ الواحي" },
+            { category: "ميكسات الواحي", name: "ديناميت الواحي" }
+        ];
+
+        let orders = [];
+
+        window.onload = function() {
+            populateMenuDropdown();
+            listenToLiveUpdates();
+            listenToConfigUpdates();
+            onItemSelectionChange();
+        };
+
+        function populateMenuDropdown() {
+            const select = document.getElementById('itemSelect');
+            select.innerHTML = '';
+            
+            const categories = [...new Set(menuItems.map(i => i.category))];
+            categories.forEach(cat => {
+                const group = document.createElement('optgroup');
+                group.label = cat;
+                menuItems.filter(i => i.category === cat).forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = JSON.stringify(item);
+                    opt.textContent = item.name;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            });
+        }
+
+        function onItemSelectionChange() {
+            const select = document.getElementById('itemSelect');
+            if (!select.value) return;
+            const item = JSON.parse(select.value);
+            
+            // Auto-fill price if previously remembered
+            if (savedItemPrices[item.name]) {
+                document.getElementById('itemPrice').value = savedItemPrices[item.name];
+            } else {
+                document.getElementById('itemPrice').value = '';
+            }
+        }
+
+        function listenToLiveUpdates() {
+            dbOrdersRef.onSnapshot((snapshot) => {
+                orders = [];
+                snapshot.forEach((doc) => {
+                    orders.push({ id: doc.id, ...doc.data() });
+                });
+                updateCalculations();
+            });
+        }
+
+        function listenToConfigUpdates() {
+            dbConfigRef.onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (data.restaurantName) document.getElementById('restaurantName').value = data.restaurantName;
+                    if (data.payerName) document.getElementById('payerName').value = data.payerName;
+                    if (data.instapayAccount) document.getElementById('instapayAccount').value = data.instapayAccount;
+                    if (data.deliveryFee) document.getElementById('deliveryFee').value = data.deliveryFee;
+                    if (data.savedItemPrices) savedItemPrices = data.savedItemPrices;
+                    updateCalculations();
+                }
+            });
+        }
+
+        function saveConfig() {
+            const configData = {
+                restaurantName: document.getElementById('restaurantName').value,
+                payerName: document.getElementById('payerName').value,
+                instapayAccount: document.getElementById('instapayAccount').value,
+                deliveryFee: parseFloat(document.getElementById('deliveryFee').value) || 0,
+                savedItemPrices: savedItemPrices
+            };
+            dbConfigRef.set(configData, { merge: true });
+        }
+
+        function addNoteTag(tagText) {
+            const notesInput = document.getElementById('itemNotes');
+            if (notesInput.value.trim() === '') {
+                notesInput.value = tagText;
+            } else {
+                notesInput.value += ` ، ${tagText}`;
+            }
+        }
+
+        function addSandwichToOrder() {
+            const nameInput = document.getElementById('employeeName');
+            const name = nameInput.value.trim();
+
+            const select = document.getElementById('itemSelect');
+            const qtyInput = document.getElementById('itemQty');
+            const priceInput = document.getElementById('itemPrice');
+            const breadInput = document.querySelector('input[name="breadType"]:checked');
+            const notesInput = document.getElementById('itemNotes');
+
+            if (!name) {
+                alert('برجاء كتابة اسمك أولاً');
+                return;
+            }
+
+            if (!select.value) return;
+
+            const selectedItem = JSON.parse(select.value);
+            const qty = parseInt(qtyInput.value) || 1;
+            const price = parseFloat(priceInput.value) || 0;
+            const bread = breadInput ? breadInput.value : 'بلدي';
+            const notes = notesInput.value.trim();
+
+            // Save price to memory if provided
+            if (price > 0) {
+                savedItemPrices[selectedItem.name] = price;
+                saveConfig();
+            }
+
+            const newItem = {
+                name: selectedItem.name,
+                price: price,
+                qty: qty,
+                bread: bread,
+                notes: notes,
+                total: price * qty
+            };
+
+            let existingOrder = orders.find(o => o.name.toLowerCase() === name.toLowerCase());
+
+            if (existingOrder) {
+                let updatedItems = [...existingOrder.items, newItem];
+                let updatedCost = (existingOrder.foodCost || 0) + newItem.total;
+                dbOrdersRef.doc(existingOrder.id).update({
+                    items: updatedItems,
+                    foodCost: updatedCost
+                });
+            } else {
+                let newDocId = Date.now().toString();
+                dbOrdersRef.doc(newDocId).set({
+                    name: name,
+                    items: [newItem],
+                    foodCost: newItem.total,
+                    isPaid: false
+                });
+            }
+
+            notesInput.value = '';
+            priceInput.value = '';
+        }
+
+        function updateItemPriceInOrder(orderId, itemIndex) {
+            const order = orders.find(o => o.id === orderId);
+            if (!order || !order.items[itemIndex]) return;
+
+            const currentPrice = order.items[itemIndex].price || 0;
+            const newPriceStr = prompt(`أدخل سعر (${order.items[itemIndex].name}):`, currentPrice);
+
+            if (newPriceStr !== null) {
+                const newPrice = parseFloat(newPriceStr) || 0;
+                
+                // Update memory
+                if (newPrice > 0) {
+                    savedItemPrices[order.items[itemIndex].name] = newPrice;
+                    saveConfig();
+                }
+
+                order.items[itemIndex].price = newPrice;
+                order.items[itemIndex].total = newPrice * order.items[itemIndex].qty;
+
+                const newFoodCost = order.items.reduce((sum, i) => sum + i.total, 0);
+
+                dbOrdersRef.doc(orderId).update({
+                    items: order.items,
+                    foodCost: newFoodCost
+                });
+            }
+        }
+
+        function updateCalculations() {
+            const deliveryFee = parseFloat(document.getElementById('deliveryFee').value) || 0;
+            const instapay = document.getElementById('instapayAccount').value.trim() || 'غير محدد';
+            const peopleCount = orders.length;
+            const deliveryPerPerson = peopleCount > 0 ? (deliveryFee / peopleCount) : 0;
+
+            let totalFood = 0;
+
+            orders.forEach(order => {
+                order.deliveryCost = deliveryPerPerson;
+                order.totalCost = (order.foodCost || 0) + deliveryPerPerson;
+                totalFood += (order.foodCost || 0);
+            });
+
+            document.getElementById('instapayText').textContent = instapay;
+            document.getElementById('peopleCountBadge').textContent = `المشاركين: ${peopleCount}`;
+            document.getElementById('grandTotal').textContent = `${(totalFood + (peopleCount > 0 ? deliveryFee : 0)).toFixed(2)} جم`;
+            document.getElementById('perPersonDelivery').textContent = `${deliveryPerPerson.toFixed(2)} جم`;
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('ordersTableBody');
+            if (orders.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400">لا توجد طلبات مسجلة حتى الآن</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = orders.map(order => `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="p-2.5 font-bold text-gray-900">${order.name}</td>
+                    <td class="p-2.5 space-y-1">
+                        ${order.items.map((i, idx) => `
+                            <div class="flex items-center justify-between border-b border-gray-100 pb-1">
+                                <div>
+                                    <span class="font-semibold text-gray-800">• ${i.qty} ${i.name} (${i.bread})</span>
+                                    ${i.notes ? `<span class="text-[10px] text-amber-700 block mr-1"> ↳ ملاحظة: ${i.notes}</span>` : ''}
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-bold text-gray-700">${i.price ? `${i.price} جم` : '<span class="text-red-500 font-normal text-[10px]">بدون سعر</span>'}</span>
+                                    <button onclick="updateItemPriceInOrder('${order.id}', ${idx})" class="text-indigo-600 hover:text-indigo-900 text-xs px-1" title="تعديل السعر">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </td>
+                    <td class="p-2.5 font-extrabold text-thndr-dark">${(order.totalCost || 0).toFixed(2)} جم</td>
+                    <td class="p-2.5">
+                        <button onclick="togglePaid('${order.id}')" class="px-2 py-0.5 rounded-full text-[10px] font-bold ${order.isPaid ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                            ${order.isPaid ? 'تم ✓' : 'لم يدفع'}
+                        </button>
+                    </td>
+                    <td class="p-2.5 text-center">
+                        <button onclick="deleteOrder('${order.id}')" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function togglePaid(id) {
+            const order = orders.find(o => o.id === id);
+            if (order) {
+                dbOrdersRef.doc(id).update({ isPaid: !order.isPaid });
+            }
+        }
+
+        function deleteOrder(id) {
+            dbOrdersRef.doc(id).delete();
+        }
+
+        function clearAllOrders() {
+            if (confirm("هل أنت تأكد من مسح جميع طلبات اليوم لبدء يوم جديد؟")) {
+                orders.forEach(o => {
+                    dbOrdersRef.doc(o.id).delete();
+                });
+            }
+        }
+
+        function toggleMenuEditor() {
+            document.getElementById('menuEditorSection').classList.toggle('hidden');
+        }
+
+        function addNewMenuItem() {
+            const cat = document.getElementById('newItemCategory').value.trim() || 'عام';
+            const name = document.getElementById('newItemName').value.trim();
+
+            if (!name) {
+                alert('برجاء كتابة اسم الصنف');
+                return;
+            }
+
+            menuItems.push({ category: cat, name: name });
+            populateMenuDropdown();
+
+            document.getElementById('newItemName').value = '';
+            alert(`تمت إضافة "${name}" للمنيو بنجاح!`);
+        }
+
+        function exportToRestaurantWhatsApp() {
+            if (orders.length === 0) {
+                alert('لا توجد طلبات لإرسالها للمطعم!');
+                return;
+            }
+
+            const restaurant = document.getElementById('restaurantName').value || 'المطعم';
+
+            let text = `🥪 *أوردر فطار - ${restaurant}*\n`;
+            text += `-----------------------------------\n\n`;
+
+            orders.forEach(o => {
+                text += `👤 *${o.name}*:\n`;
+                o.items.forEach(i => {
+                    text += `   - ${i.qty} ${i.name} (عيش ${i.bread})`;
+                    if (i.notes) text += ` [ملاحظة: ${i.notes}]`;
+                    text += `\n`;
+                });
+                text += `\n`;
+            });
+
+            navigator.clipboard.writeText(text);
+            alert('تم نسخ أوردر المطعم بنجاح (الأسماء والتفاصيل فقط)! يمكنك الآن لصقه في شات المطعم على الواتساب.');
+        }
+    </script>
+</body>
+</html>
